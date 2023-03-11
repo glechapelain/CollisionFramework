@@ -61,10 +61,10 @@ namespace {
 					     pair<float, float>( 2, 80 ),
 					     pair<float, float>( 4, 90 ),
 					     pair<float, float>( 5, 80 ),
-					     pair<float, float>( 6, 80 ) }, float3D(195.212677, 151.169327), float3D(-80.43, -67.5), -0.308457941, -1 },
+					     pair<float, float>( 6, 80 ) }, float3D(195.212677, 151.169327), float3D(15470.43, -67.5), -0.308457941, -1 },
 					 { { pair<float, float>( 1, 100),
 					     pair<float, float>( 4, 90 ),
-					     pair<float, float>( 6, 80 ) }, float3D(262.598, 108.94), float3D(-80.43, 67.5), 0.215983137, .7 } };
+					     pair<float, float>( 6, 80 ) }, float3D(375, 108.94), float3D(-15360.43, 67.5), 3, .7 } };
 	constexpr size_t PolyCount(sizeof defpolys / sizeof *defpolys);
 	const unsigned frameRate = 30; // 30 frame per second is the frame rate.
 	const int timeSpan = 1000 / frameRate; // milliseconds
@@ -78,7 +78,7 @@ namespace {
 	bool pointSet = false;
 	bool normalSet = false;
 
-	bool pause = true;
+	bool pause = false;
 
 	struct AABB
 	{// pos is center of AABB, extent is half length extend in each direction
@@ -108,10 +108,10 @@ namespace {
 
 	struct PhysicsObj
 	{
-		float3D pos, vel; // pos and velocity of the Object.
+		float3D pos, nextPos, vel; // pos and velocity of the Object.
 		float3D rotationAxis;
 		float rotationSpeed;
-		float orientation;
+		float orientation, nextOrientation;
 		Matrix3 transformation;
 		bool Colliding;
 		AABB mAABB{};
@@ -678,6 +678,7 @@ namespace {
 							poly2.colliding[s2] = true;
 
 							do_collide = true;
+							pause = true;
 
 							// poly1.Colliding = true;
 						}
@@ -866,7 +867,7 @@ namespace {
 			auto const &polydef(defpolys[i]);
 			float rad = radius * (1. + float(std::rand() % PolyCount) / float(PolyCount));
 			unsigned nSides = polydef.vertPolarCoordinate.size();
-			sPolygons.push_back(make_shared<Polygon>(polydef.pos, polydef.vel, polydef.vertPolarCoordinate.size(), polydef.rotationVelocity));
+			sPolygons.push_back(make_shared<Polygon>(polydef.pos, polydef.vel, polydef.vertPolarCoordinate.size(), polydef.rotationVelocity, polydef.rotation));
 			for (int j = 0; j < nSides; j++)
 			{
 				pair<float, float> const &vert(polydef.vertPolarCoordinate[j]);
