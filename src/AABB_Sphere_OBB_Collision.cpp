@@ -78,7 +78,7 @@ namespace {
 	bool pointSet = false;
 	bool normalSet = false;
 
-	bool pause = false;
+	bool pause = true;
 
 	struct AABB
 	{// pos is center of AABB, extent is half length extend in each direction
@@ -637,7 +637,7 @@ namespace {
 
 		return false; // Doesn't fall in any of the above cases
 	}
-	void segmentCollisionCheck()
+	void segmentCollisionCheck(double deltaTime)
 	{
 		bool do_collide = false;
 		for_each(sPolygons.begin(), sPolygons.end(), [&](auto& p) {p->Colliding = false; });
@@ -653,29 +653,51 @@ namespace {
 		for (int i = 0; i < sPolygons.size(); i++)
 		{
 
-			Polygon& poly1 = *sPolygons[i];
-			for (size_t s1 = 0; s1 < poly1.nSides; s1++)
+			Polygon& polyA = *sPolygons[i];
+			for (size_t s1 = 0; s1 < polyA.nSides; s1++)
 			{
-				float3D p1 = poly1.pos + poly1.transformation * poly1.vertices[s1];
-				float3D q1 = poly1.pos + poly1.transformation * poly1.vertices[(s1 + 1) % poly1.nSides];
+				float3D p1 = polyA.pos + polyA.transformation * polyA.vertices[s1];
+				float3D q1 = polyA.pos + polyA.transformation * polyA.vertices[(s1 + 1) % polyA.nSides];
 
 
-				for (int j = i + 1; j < sPolygons.size(); j++)
+				for (int j = 0; j < sPolygons.size(); j++)
 				{
-					Polygon& poly2 = *sPolygons[j];
-					poly2.Colliding = false;
-
-					for (size_t s2 = 0; s2 < poly2.nSides; s2++)
+					if (i == j)
 					{
-						float3D p2 = poly2.pos + poly2.transformation * poly2.vertices[s2];
-						float3D q2 = poly2.pos + poly2.transformation * poly2.vertices[(s2 + 1) % poly2.nSides];
+						continue;
+					}
+					Polygon& polyB = *sPolygons[j];
+					polyB.Colliding = false;
+
+					for (size_t s2 = 0; s2 < polyB.nSides; s2++)
+					{
+						float3D p2 = polyB.pos + polyB.transformation * polyB.vertices[s2];
+
+						float3D wp2 = Cross(float3D(0, 0, 1.f), Normal(p2 - polyB.pos)) * (p2 - polyB.pos).Length() * polyB.rotationSpeed;
+						float3D wAp2 = Cross(float3D(0, 0, 1.f), Normal(p2 - polyA.pos)) * (p2 - polyA.pos).Length() * polyA.rotationSpeed;
+						float3D dwp2 = wp2 * timeInc;
+						float3D dwAp2 = wAp2 * timeInc;
+
+						float3D q2_vel = p2 + polyB.vel - polyA.vel + wp2 - wAp2;
+						float3D q2 = p2 + (polyB.vel - polyA.vel + dwp2 - dwAp2) * deltaTime;
+
+						glColor3ub(0, 0, 0);
+						glLineWidth(1);
+						glBegin(GL_LINES);
+						glVertex2f(p2.x, p2.y);
+						glVertex2f(q2.x, q2.y);
+						glEnd();
 
 						if (Intersect(p1, q1, p2, q2))
 						{
+							float3D actualIntersect = GetIntersect(p1, q1, p2, q2);
+							float howFarAlongVelocity((actualIntersect - p2).Length() / (q2 - p2).Length());
+
+
 							// poly2.Colliding = true;
 
-							poly1.colliding[s1] = true;
-							poly2.colliding[s2] = true;
+							polyA.colliding[s1] = true;
+							polyB.colliding[s2] = true;
 
 							do_collide = true;
 							pause = true;
@@ -776,13 +798,8 @@ namespace {
 	{
 		////////////Next update Polys positions //////////////////
 		for_each(sPolygons.begin(), sPolygons.end(), [timeInc](shared_ptr<Polygon>& obj) {
-			if(!pause){
-				obj->pos += obj->vel * timeInc;
-				obj->orientation += obj->rotationSpeed * timeInc;
-			}
-			obj->transformation.setRow(0, float3D(  cos(obj->orientation), sin(obj->orientation), 0));
-			obj->transformation.setRow(1, float3D(- sin(obj->orientation), cos(obj->orientation), 0));
-			obj->transformation.setRow(2, float3D(  0, 0, 1.f));
+			obj->nextPos = obj->pos + obj->vel * timeInc;
+			obj->nextOrientation = obj->orientation + obj->rotationSpeed * timeInc;
 			});
 
 		///// next check collisions ///////////////////////
@@ -790,7 +807,7 @@ namespace {
 		{
 		case eCollisionMode::eSphere:
 			spheresCollisionCheck();
-			segmentCollisionCheck(); // FIXME
+			segmentCollisionCheck(timeInc); // FIXME
 			break;
 		case eCollisionMode::eAABB:
 			aabbCollisionCheck();
@@ -806,9 +823,17 @@ namespace {
 			//std::cout << "Resolving not done!\n";
 			collisionResolve();
 		}
+
+		for_each(sPolygons.begin(), sPolygons.end(), [timeInc](shared_ptr<Polygon>& obj) {
+			if (!pause) {
+				obj->pos = obj->nextPos;
+				obj->orientation = obj->nextOrientation;
+				obj->transformation.setRow(0, float3D( cos(obj->orientation), sin(obj->orientation), 0));
+				obj->transformation.setRow(1, float3D(-sin(obj->orientation), cos(obj->orientation), 0));
+				obj->transformation.setRow(2, float3D( 0, 0, 1.f));
+			}
+		});
 	}
-
-
 	//////////////////////////////////////////////////////////////////
 	void checkEdgeCollision()
 	{

@@ -267,7 +267,7 @@ Vector3d<T> GetIntersect(const Vector3d<T>&aa, const Vector3d<T>& ab, const Vect
 	T denominator = (aa.x - ab.x)*(ba.y - bb.y) -
 	(aa.y - ab.y)*(ba.x - bb.x);
 
-	return Vector3d(pX / denominator, pY / denominator);
+	return Vector3d<T>(pX / denominator, pY / denominator);
 }
 
 
