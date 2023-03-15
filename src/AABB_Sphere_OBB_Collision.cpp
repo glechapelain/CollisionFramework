@@ -811,7 +811,7 @@ namespace {
 					float w2_prime = poly2.rotationSpeed + (njr * I2_1 * Cross(r2, normal)).z;
 					int I = 0;
 					++I;
-
+					pause = true;
 					if (doResolve) {
 					sPolygons[0]->vel = v1_prime;
 					sPolygons[1]->vel = v2_prime;
