@@ -371,6 +371,24 @@ namespace {
 			float3D pt2 = poly.pos + poly.transformation * poly.vertices[(j + 1) % poly.nSides];
 			glVertex2d(pt1.x, pt1.y);
 			glVertex2d(pt2.x, pt2.y);
+
+			glLineWidth(1);
+			glColor3ub(255, 0, 0);
+			{
+				float3D pt1 = poly.pos;
+				float3D pt2 = poly.pos + poly.transformation * float3D(25.f, 0, 0);
+
+				glVertex2d(pt1.x, pt1.y);
+				glVertex2d(pt2.x, pt2.y);
+			}
+			glColor3ub(0, 255, 0);
+			{
+				float3D pt1 = poly.pos;
+				float3D pt2 = poly.pos + poly.transformation * float3D(0, 25.f, 0);
+
+				glVertex2d(pt1.x, pt1.y);
+				glVertex2d(pt2.x, pt2.y);
+			}
 		}
 		glEnd();
 		glPointSize(7);
