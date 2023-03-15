@@ -773,10 +773,14 @@ namespace {
 					Polygon& poly2 = *sPolygons[1];
 
 					float3D r1 = contactPoint - poly1.pos;
-					r1 = poly1.transformation.invert() * r1;
+					r1 = float3D(Dot(poly1.transformation.getRow(0), r1),
+								 Dot(poly1.transformation.getRow(1), r1),
+								 0);
 
 					float3D r2 = contactPoint - poly2.pos;
-					r2 = poly2.transformation.invert() * r2;
+					r2 = float3D(Dot(poly1.transformation.getRow(0), r2),
+								 Dot(poly1.transformation.getRow(1), r2),
+								 0);
 
 					float3D av1 = Cross(-Normal(r1), float3D(0, 0, 1.f)) * poly1.rotationSpeed * r1.Length();
 					float3D av2 = Cross(-Normal(r2), float3D(0, 0, 1.f)) * poly2.rotationSpeed * r2.Length();
