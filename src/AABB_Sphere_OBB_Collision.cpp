@@ -735,39 +735,75 @@ namespace {
 				}
 			}
 
+			static float size_normal = 10.f;
 			if (normalSet && pointSet)
 			{
-				static float size_normal = 10.f;
-				if (normalSet && pointSet)
-				{
-					float3D pt1 = contactPoint;
-					float3D pt2 = contactPoint + normal * size_normal;
-					//float3D pt1(50, 50);
-					//	float3D pt2(60, 60);
+				float3D pt1 = contactPoint;
+				float3D pt2 = contactPoint + normal * size_normal;
+				//float3D pt1(50, 50);
+				//	float3D pt2(60, 60);
 
-					//glLineWidth(1);
-					glBegin(GL_LINES);
-					glColor3ub(0, 0, 0);
+				//glLineWidth(1);
+				glBegin(GL_LINES);
+				glColor3ub(0, 0, 0);
 
-					glVertex2d(pt1.x, pt1.y);
-					glVertex2d(pt2.x, pt2.y);
+				glVertex2d(pt1.x, pt1.y);
+				glVertex2d(pt2.x, pt2.y);
 
-					glEnd();
+					static float e(1.f);
+					Polygon& poly1 = *sPolygons[0];
+					Polygon& poly2 = *sPolygons[1];
+
+					float3D r1 = contactPoint - poly1.pos;
+					r1 = poly1.transformation.invert() * r1;
+
+					float3D r2 = contactPoint - poly2.pos;
+					r2 = poly2.transformation.invert() * r2;
+
+					float3D av1 = Cross(-Normal(r1), float3D(0, 0, 1.f)) * poly1.rotationSpeed * r1.Length();
+					float3D av2 = Cross(-Normal(r2), float3D(0, 0, 1.f)) * poly2.rotationSpeed * r2.Length();
+
+					float3D vr = poly2.vel + av2 - (poly1.vel + av1);
+					static float m1_1(1), m2_1(1);
+					static Matrix3 I1_1(Matrix3::identity()),
+								   I2_1(Matrix3::identity());
+					auto display=[](Polygon const &poly, float3D av, float3D r)
+					{
+						//float3D pt1 = poly.pos;
+						float3D rlocal(poly.transformation * r);
+						float3D pt1 = poly.pos + rlocal;
+						float3D pt2 = pt1 + av;
+
+						glLineWidth(1);
+						glColor3ub(0, 0, 0);
+
+						glVertex2d(pt1.x, pt1.y);
+						glVertex2d(pt2.x, pt2.y);
+					};
+					display(poly1, av1, r1);
+					display(poly2, av2, r2);
+
+					float njr = - Dot(vr, normal) * (1.f + e) / (m1_1 + m2_1 + Dot(((I1_1 * Cross(Cross(r1, normal), r1)) + I2_1  * Cross(Cross(r2, normal), r2)), normal));
+					float3D jr = normal * njr;
+
+					float3D v1_prime = poly1.vel - normal * (njr * m1_1);
+					float3D v2_prime = poly2.vel + normal * (njr * m2_1);
+
+					float w1_prime = poly1.rotationSpeed - (njr * I1_1 * Cross(r1, normal)).z;
+					float w2_prime = poly2.rotationSpeed + (njr * I2_1 * Cross(r2, normal)).z;
+					int I = 0;
+					++I;
+
+					if (doResolve) {
+					sPolygons[0]->vel = v1_prime;
+					sPolygons[1]->vel = v2_prime;
+
+					sPolygons[0]->rotationSpeed = w1_prime;
+					sPolygons[1]->rotationSpeed = w2_prime;
+
+
 				}
-
-				if (doResolve) {
-				float3D v1_prime = -sPolygons[0]->vel;
-				float3D v2_prime = -sPolygons[1]->vel;
-
-				float w1_prime = -sPolygons[0]->rotationSpeed;
-				float w2_prime = -sPolygons[1]->rotationSpeed;
-
-				sPolygons[0]->vel = v1_prime;
-				sPolygons[1]->vel = v2_prime;
-
-				sPolygons[0]->rotationSpeed = w1_prime;
-				sPolygons[1]->rotationSpeed = w2_prime;
-			}
+				glEnd();
 			}
 		}
 	}
