@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <stdlib.h>
 #include <ctime>
@@ -51,20 +52,20 @@ namespace {
 		eOBB
 	};
 	eCollisionMode CollisionType = eCollisionMode::eSphere;
+	bool pause = true;
 
 	const struct {
 		vector<pair<float, float>> vertPolarCoordinate;
 		float3D pos, vel;
+		float rotation;
 		float rotationVelocity;
 	} defpolys[] = { { { pair<float, float>( 1, 100),
 					     pair<float, float>( 2, 80 ),
 					     pair<float, float>( 4, 90 ),
 					     pair<float, float>( 5, 80 ),
-					     pair<float, float>( 6, 80 ) }, float3D(202.68, 173.4 ), float3D(80.43, 67.5), 1 },
-					 { { pair<float, float>( 1, 100),
+					     pair<float, float>( 6, 80 ) }, float3D(202.68, 173.4 ), float3D(80.43, 67.5), 1 },					 { { pair<float, float>( 1, 100),
 					     pair<float, float>( 4, 90 ),
-					     pair<float, float>( 6, 80 ) }, float3D(289.086, 88.21), float3D(80.43, -67.5), -.7 } };
-	constexpr size_t PolyCount(sizeof defpolys / sizeof *defpolys);
+					     pair<float, float>( 6, 80 ) }, float3D(289.086, 88.21), float3D(80.43, -67.5), -.7 } };	constexpr size_t PolyCount(sizeof defpolys / sizeof *defpolys);
 	const unsigned frameRate = 30; // 30 frame per second is the frame rate.
 	const int timeSpan = 1000 / frameRate; // milliseconds
 	const double timeInc = (double)timeSpan * 0.001; // time increment in seconds
@@ -109,7 +110,7 @@ namespace {
 		float3D rotationAxis;
 		float rotationSpeed;
 		float orientation;
-		Matrix3 transformation;
+		Matrix3 transformation; // FIXME duplicates OBB.
 		bool Colliding;
 		AABB mAABB{};
 		OBB mOBB{};
@@ -410,7 +411,6 @@ namespace {
 	int Menu(void)
 	{
 		int r = eIdle, key;
-		doResolve = true; // by default we do resolve collisions
 		while (r != eStop && r != eStart)
 		{
 			FsPollDevice();
@@ -439,7 +439,7 @@ namespace {
 				CollisionType = eCollisionMode::eOBB;
 				break;
 			case FSKEY_N:
-				doResolve = false;
+				doResolve = !doResolve;
 				break;
 			}
 
@@ -463,7 +463,7 @@ namespace {
 				CollisionType == eCollisionMode::eAABB ? "AABB Colliion" : "OBB Collision");
 
 			char sCollisionResolve[128];
-			sprintf(sCollisionResolve, "Collisions are resolved? %s: (N for Not Resolving)\n", doResolve ? "Yes" : "No");
+			sprintf(sCollisionResolve, "Collisions are resolved? %s: (Toggle with N)\n", doResolve ? "Yes" : "No");
 
 			glColor3ub(255, 255, 255);
 
@@ -726,22 +726,76 @@ namespace {
 				}
 			}
 
+			static float size_normal = 10.f;
 			if (normalSet && pointSet)
 			{
-				if (doResolve) {
-				float3D v1_prime = -sPolygons[0]->vel;
-				float3D v2_prime = -sPolygons[1]->vel;
+				float3D pt1 = contactPoint;
+				float3D pt2 = contactPoint + normal * size_normal;
+				//float3D pt1(50, 50);
+				//	float3D pt2(60, 60);
 
-				float w1_prime = -sPolygons[0]->rotationSpeed;
-				float w2_prime = -sPolygons[1]->rotationSpeed;
+				//glLineWidth(1);
+				glBegin(GL_LINES);
+				glColor3ub(0, 0, 0);
 
-				sPolygons[0]->vel = v1_prime;
-				sPolygons[1]->vel = v2_prime;
+				glVertex2d(pt1.x, pt1.y);
+				glVertex2d(pt2.x, pt2.y);
 
-				sPolygons[0]->rotationSpeed = w1_prime;
-				sPolygons[1]->rotationSpeed = w2_prime;
+					static float e(1.f);
+					Polygon& poly1 = *sPolygons[0];
+					Polygon& poly2 = *sPolygons[1];
+
+					float3D r1 = contactPoint - poly1.pos;
+					r1 = poly1.transformation.invert() * r1;
+
+					float3D r2 = contactPoint - poly2.pos;
+					r2 = poly2.transformation.invert() * r2;
+
+					float3D av1 = Cross(-Normal(r1), float3D(0, 0, 1.f)) * poly1.rotationSpeed * r1.Length();
+					float3D av2 = Cross(-Normal(r2), float3D(0, 0, 1.f)) * poly2.rotationSpeed * r2.Length();
+
+					float3D vr = poly2.vel + av2 - (poly1.vel + av1);
+					static float m1_1(1), m2_1(1);
+					static Matrix3 I1_1(Matrix3::identity()),
+								   I2_1(Matrix3::identity());
+					auto display=[](Polygon const &poly, float3D av, float3D r)
+					{
+						float3D pt1 = poly.pos;
+						float3D rlocal(poly.transformation * r);
+						float3D pt2 = poly.pos + rlocal;
+						//float3D pt2 = pt1 + av;
+
+						glLineWidth(1);
+						glColor3ub(0, 0, 0);
+
+						glVertex2d(pt1.x, pt1.y);
+						glVertex2d(pt2.x, pt2.y);
+					};
+					display(poly1, av1, r1);
+					//display(poly2, av2, r2);
+					
+					float njr = - Dot(vr, normal) * (1.f + e) / (m1_1 + m2_1 + Dot(((I1_1 * Cross(Cross(r1, normal), r1)) + I2_1  * Cross(Cross(r2, normal), r2)), normal));
+					float3D jr = normal * njr;
+
+					float3D v1_prime = poly1.vel - normal * (njr * m1_1);
+					float3D v2_prime = poly2.vel + normal * (njr * m2_1);
+
+					float w1_prime = poly1.rotationSpeed - (njr * I1_1 * Cross(r1, normal)).z;
+					float w2_prime = poly2.rotationSpeed + (njr * I2_1 * Cross(r2, normal)).z;
+					
+					if (doResolve) {
+					sPolygons[0]->vel = v1_prime;
+					sPolygons[1]->vel = v2_prime;
+
+					sPolygons[0]->rotationSpeed = w1_prime;
+					sPolygons[1]->rotationSpeed = w2_prime;
+
+
+				}
+				glEnd();
 			}
-			}
+			//else
+			//	doResolve = true;
 		}
 	}
 
@@ -754,8 +808,11 @@ namespace {
 	{
 		////////////Next update Polys positions //////////////////
 		for_each(sPolygons.begin(), sPolygons.end(), [timeInc](shared_ptr<Polygon>& obj) {
-			obj->pos += obj->vel * timeInc;
-			obj->orientation += obj->rotationSpeed * timeInc;
+			if (!pause) {
+				obj->pos += obj->vel * timeInc;
+				obj->orientation += obj->rotationSpeed * timeInc;
+			}
+
 			obj->transformation.setRow(0, float3D(  cos(obj->orientation), sin(obj->orientation), 0));
 			obj->transformation.setRow(1, float3D(- sin(obj->orientation), cos(obj->orientation), 0));
 			obj->transformation.setRow(2, float3D(  0, 0, 1.f));
@@ -821,23 +878,53 @@ namespace {
 				DrawPolygon(*poly);
 			else
 				DrawCollisionGeo(*poly);
-		}
-		static float size_normal = 10.f;
-		if (normalSet && pointSet)
-		{
-			float3D pt1 = contactPoint;
-			float3D pt2 = contactPoint + normal * size_normal;
-			//float3D pt1(50, 50);
-			//	float3D pt2(60, 60);
-
-			//glLineWidth(1);
+			glLineWidth(2);
 			glBegin(GL_LINES);
 			glColor3ub(0, 0, 0);
+			glVertex2d(poly->pos.x, poly->pos.y);
+			glVertex2d(poly->pos.x + poly->vel.x, poly->pos.y + poly->vel.y);
 
-			glVertex2d(pt1.x, pt1.y);
-			glVertex2d(pt2.x, pt2.y);
+			glColor3ub(255, 0, 0);
+
+			static float radiuscircle(20.f);
+			static int numsegmentpercircle(80);
+			int numsegment(float(numsegmentpercircle) / 2.f * fabs(poly->rotationSpeed) / M_PI);
+			float signSpeed(fabs(poly->rotationSpeed) / poly->rotationSpeed);
+
+			for (int j = 0; j < numsegment; ++j)
+			{
+				float a(float(j) / float(numsegmentpercircle) * M_PI * 2.f);
+				float a2(float(j + 1) / float(numsegmentpercircle) * M_PI * 2.f);
+				float3D pt1(signSpeed * sin(a),  - cos(a), 0);
+				float3D pt2(signSpeed * sin(a2), - cos(a2), 0);
+
+				float3D p_1(poly->pos + pt1 * radiuscircle);
+				float3D p_2(poly->pos + pt2 * radiuscircle);
+
+				glVertex2d(p_1.x, p_1.y);
+				glVertex2d(p_2.x, p_2.y);
+
+			}
+			static float size_axis(10);
+			glColor3ub(0, 0, 255);
+			{
+				float3D pt1(poly->pos);
+				float3D pt2(poly->pos + poly->transformation * float3D(size_axis, 0, 0));
+
+				glVertex2d(pt1.x, pt1.y);
+				glVertex2d(pt2.x, pt2.y);
+			}
+
+			{
+				float3D pt1(poly->pos);
+				float3D pt2(poly->pos + poly->transformation * float3D(0, size_axis, 0));
+
+				glVertex2d(pt1.x, pt1.y);
+				glVertex2d(pt2.x, pt2.y);
+			}
 
 			glEnd();
+
 		}
 
 		////  swap //////////
@@ -860,7 +947,7 @@ namespace {
 			auto const &polydef(defpolys[i]);
 			float rad = radius * (1. + float(std::rand() % PolyCount) / float(PolyCount));
 			unsigned nSides = polydef.vertPolarCoordinate.size();
-			sPolygons.push_back(make_shared<Polygon>(polydef.pos, polydef.vel, polydef.vertPolarCoordinate.size(), polydef.rotationVelocity));
+			sPolygons.push_back(make_shared<Polygon>(polydef.pos, polydef.vel, polydef.vertPolarCoordinate.size(), polydef.rotationVelocity, polydef.rotation));
 			for (int j = 0; j < nSides; j++)
 			{
 				pair<float, float> const &vert(polydef.vertPolarCoordinate[j]);
@@ -915,8 +1002,8 @@ namespace {
 			int key = FsInkey();
 			if (key == FSKEY_ESC)
 				break;
-
-			renderScene();
+			if (key == FSKEY_P)
+				pause = !pause;
 
 			checkEdgeCollision();
 
@@ -930,6 +1017,8 @@ namespace {
 			double inc = (double)(timediff) / (double)numOfIterations * 0.001;
 			for (int i = 0; i < numOfIterations; i++)
 				updatePhysics(inc);
+
+			renderScene();
 
 			//	printf("\inc=%f, numOfIterations=%d, timediff=%d", inc, numOfIterations, timediff);
 			while (timediff >= timeSpan / 3)
