@@ -57,15 +57,16 @@ namespace {
 	const struct {
 		vector<pair<float, float>> vertPolarCoordinate;
 		float3D pos, vel;
+		float rotation;
 		float rotationVelocity;
 	} defpolys[] = { { { pair<float, float>( 1, 100),
 					     pair<float, float>( 2, 80 ),
 					     pair<float, float>( 4, 90 ),
 					     pair<float, float>( 5, 80 ),
-					     pair<float, float>( 6, 80 ) }, float3D(202.68, 173.4 ), float3D(80.43, 67.5), 1 },
+					     pair<float, float>( 6, 80 ) }, float3D(195.212677, 151.169327), float3D(-80.43, -67.5), -0.308457941, -1 },
 					 { { pair<float, float>( 1, 100),
 					     pair<float, float>( 4, 90 ),
-					     pair<float, float>( 6, 80 ) }, float3D(289.086, 88.21), float3D(80.43, -67.5), -.7 } };
+					     pair<float, float>( 6, 80 ) }, float3D(289.598, 108.94), float3D(-80.43, 67.5), 0.215983137, .7 } };
 	constexpr size_t PolyCount(sizeof defpolys / sizeof *defpolys);
 	const unsigned frameRate = 30; // 30 frame per second is the frame rate.
 	const int timeSpan = 1000 / frameRate; // milliseconds
