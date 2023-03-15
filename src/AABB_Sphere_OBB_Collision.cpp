@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <stdlib.h>
 #include <ctime>
@@ -51,20 +52,20 @@ namespace {
 		eOBB
 	};
 	eCollisionMode CollisionType = eCollisionMode::eSphere;
+	bool pause = true;
 
 	const struct {
 		vector<pair<float, float>> vertPolarCoordinate;
 		float3D pos, vel;
-		float rotation;
 		float rotationVelocity;
 	} defpolys[] = { { { pair<float, float>( 1, 100),
 					     pair<float, float>( 2, 80 ),
 					     pair<float, float>( 4, 90 ),
 					     pair<float, float>( 5, 80 ),
-					     pair<float, float>( 6, 80 ) }, float3D(195.212677, 151.169327), float3D(-80.43, -67.5), -0.308457941, -1 },
+					     pair<float, float>( 6, 80 ) }, float3D(202.68, 173.4 ), float3D(80.43, 67.5), 1 },
 					 { { pair<float, float>( 1, 100),
 					     pair<float, float>( 4, 90 ),
-					     pair<float, float>( 6, 80 ) }, float3D(262.598, 108.94), float3D(-80.43, 67.5), 0.215983137, .7 } };
+					     pair<float, float>( 6, 80 ) }, float3D(289.086, 88.21), float3D(80.43, -67.5), -.7 } };
 	constexpr size_t PolyCount(sizeof defpolys / sizeof *defpolys);
 	const unsigned frameRate = 30; // 30 frame per second is the frame rate.
 	const int timeSpan = 1000 / frameRate; // milliseconds
@@ -77,8 +78,6 @@ namespace {
 	float3D normal;
 	bool pointSet = false;
 	bool normalSet = false;
-
-	bool pause = true;
 
 	struct AABB
 	{// pos is center of AABB, extent is half length extend in each direction
@@ -112,7 +111,7 @@ namespace {
 		float3D rotationAxis;
 		float rotationSpeed;
 		float orientation;
-		Matrix3 transformation;
+		Matrix3 transformation; // FIXME duplicates OBB.
 		bool Colliding;
 		AABB mAABB{};
 		OBB mOBB{};
@@ -442,7 +441,7 @@ namespace {
 				CollisionType = eCollisionMode::eOBB;
 				break;
 			case FSKEY_N:
-				doResolve = false;
+				doResolve = !doResolve;
 				break;
 			}
 
@@ -466,7 +465,7 @@ namespace {
 				CollisionType == eCollisionMode::eAABB ? "AABB Colliion" : "OBB Collision");
 
 			char sCollisionResolve[128];
-			sprintf(sCollisionResolve, "Collisions are resolved? %s: (N for Not Resolving)\n", doResolve ? "Yes" : "No");
+			sprintf(sCollisionResolve, "Collisions are resolved? %s: (Toggle with N)\n", doResolve ? "Yes" : "No");
 
 			glColor3ub(255, 255, 255);
 
@@ -710,7 +709,13 @@ namespace {
 					// normal = <-
 					float3D segment = ( poly.pos + poly.transformation * poly.vertices[(points[0] + 1) % poly.nSides] )
 									- ( poly.pos + poly.transformation * poly.vertices[points[0]]					  );
-					normal = float3D(-segment.y, segment.x);
+					if(i)
+					{
+						normal = float3D(-segment.y, segment.x);
+					} else
+					{
+						normal = float3D(segment.y, -segment.x);
+					}
 					normal /= normal.Length();
 					normalSet = true;
 				}
@@ -775,13 +780,14 @@ namespace {
 	{
 		////////////Next update Polys positions //////////////////
 		for_each(sPolygons.begin(), sPolygons.end(), [timeInc](shared_ptr<Polygon>& obj) {
-			if(!pause){
+			if (!pause) {
 				obj->pos += obj->vel * timeInc;
 				obj->orientation += obj->rotationSpeed * timeInc;
 			}
-			obj->transformation.setRow(0, float3D(  cos(obj->orientation), sin(obj->orientation), 0));
-			obj->transformation.setRow(1, float3D(- sin(obj->orientation), cos(obj->orientation), 0));
-			obj->transformation.setRow(2, float3D(  0, 0, 1.f));
+
+			obj->transformation.setRow(0, float3D(cos(obj->orientation), -sin(obj->orientation), 0));
+			obj->transformation.setRow(1, float3D(sin(obj->orientation),  cos(obj->orientation), 0));
+			obj->transformation.setRow(2, float3D(0, 0, 1.f));
 			});
 
 		///// next check collisions ///////////////////////
@@ -845,6 +851,23 @@ namespace {
 			else
 				DrawCollisionGeo(*poly);
 		}
+		static float size_normal = 10.f;
+		if (normalSet && pointSet)
+		{
+			float3D pt1 = contactPoint;
+			float3D pt2 = contactPoint + normal * size_normal;
+			//float3D pt1(50, 50);
+			//	float3D pt2(60, 60);
+
+			//glLineWidth(1);
+			glBegin(GL_LINES);
+			glColor3ub(0, 0, 0);
+
+			glVertex2d(pt1.x, pt1.y);
+			glVertex2d(pt2.x, pt2.y);
+
+			glEnd();
+		}
 
 		////  swap //////////
 		FsSwapBuffers();
@@ -866,7 +889,7 @@ namespace {
 			auto const &polydef(defpolys[i]);
 			float rad = radius * (1. + float(std::rand() % PolyCount) / float(PolyCount));
 			unsigned nSides = polydef.vertPolarCoordinate.size();
-			sPolygons.push_back(make_shared<Polygon>(polydef.pos, polydef.vel, polydef.vertPolarCoordinate.size(), polydef.rotationVelocity));
+			sPolygons.push_back(make_shared<Polygon>(polydef.pos, polydef.vel, polydef.vertPolarCoordinate.size(), polydef.rotationVelocity, polydef.rotation));
 			for (int j = 0; j < nSides; j++)
 			{
 				pair<float, float> const &vert(polydef.vertPolarCoordinate[j]);
@@ -877,8 +900,8 @@ namespace {
 				float3D side(curRadius * cos(angle), curRadius * sin(angle));
 				sPolygons[i]->setVertex(&vert - &polydef.vertPolarCoordinate[0], side);
 				auto obj(sPolygons[i]);
-				obj->transformation.setRow(0, float3D( cos(obj->orientation), sin(obj->orientation), 0));
-				obj->transformation.setRow(1, float3D(-sin(obj->orientation), cos(obj->orientation), 0));
+				obj->transformation.setRow(0, float3D(cos(obj->orientation), -sin(obj->orientation), 0));
+				obj->transformation.setRow(1, float3D(sin(obj->orientation), cos(obj->orientation), 0));
 				obj->transformation.setRow(2, float3D(0, 0, 1.f));
 
 			}
